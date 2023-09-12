@@ -1,6 +1,6 @@
 ---
 - name: Example Playbook with set_fact, win_shell, service management, reboot, and updates
-  hosts: all
+  hosts: windows
   gather_facts: false
   vars:
     reboot_count_limit: 2
@@ -10,15 +10,16 @@
     delay: 10
     expiry_time: 1
     reboot_hour_limit: 3600
+    vault_password_file: /home/jerry/Desktop/ansible_roles/password
     update_success: false
     count: 0
   vars_files:
-    - library/secrets/secret.yml 
+    - library/secrets/vault2.yml 
   tasks: 
     - name: Set credentials as facts
       set_fact:
-        ansible_username: "{{ ansible_user }}" 
-        ansible_password: "{{ ansible_windows_user_pass }}"
+        ansible_username: "{{ username }}"
+        ansible_password: "{{ password }}"
         
 
 
@@ -81,7 +82,7 @@
       rescue:
         - name: Show credentials
           debug:
-            msg: "Username is {{ ansible_user }} and password is {{ ansible_windows_user_pass }}"
+            msg: "Username is {{ username }} and password is {{ password }}"
             
         - name: Capture current time
           win_shell: |
