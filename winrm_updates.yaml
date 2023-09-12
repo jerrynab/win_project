@@ -1,6 +1,6 @@
 ---
 - name: Example Playbook with set_fact, win_shell, service management, reboot, and updates
-  hosts: windows
+  hosts: all
   gather_facts: false
   vars:
     reboot_count_limit: 2
