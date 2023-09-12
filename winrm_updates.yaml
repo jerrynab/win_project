@@ -10,16 +10,15 @@
     delay: 10
     expiry_time: 1
     reboot_hour_limit: 3600
-    vault_password_file: /home/jerry/Desktop/ansible_roles/password
     update_success: false
     count: 0
   vars_files:
-    - library/secrets/vault2.yml 
+    - library/secrets/secret.yml 
   tasks: 
     - name: Set credentials as facts
       set_fact:
-        ansible_username: "{{ username }}"
-        ansible_password: "{{ password }}"
+        ansible_username: "{{ ansible_user }}" 
+        ansible_password: "{{ ansible_windows_user_pass }}"
         
 
 
@@ -82,7 +81,7 @@
       rescue:
         - name: Show credentials
           debug:
-            msg: "Username is {{ username }} and password is {{ password }}"
+            msg: "Username is {{ ansible_user }} and password is {{ ansible_windows_user_pass }}"
             
         - name: Capture current time
           win_shell: |
