@@ -1,0 +1,131 @@
+---
+- name: Example Playbook with set_fact, win_shell, service management, reboot, and updates
+  hosts: windows
+  gather_facts: false
+  vars:
+    reboot_count_limit: 2
+    retry_update_result:
+      changed: false
+    retries: 3  
+    delay: 10
+    expiry_time: 1
+    reboot_hour_limit: 3600
+    vault_password_file: /home/jerry/Desktop/ansible_roles/password
+    update_success: false
+    count: 0
+  vars_files:
+    - library/secrets/vault2.yml 
+  tasks: 
+    - name: Set credentials as facts
+      set_fact:
+        ansible_username: "{{ username }}"
+        ansible_password: "{{ password }}"
+        
+
+
+    - name: Capture start time
+      win_shell: |
+        $current_time = Get-Date
+        $formatted_time = $current_time.ToString("yyyy-MM-dd HH:mm:ss")
+        $formatted_time
+      register: start_time
+
+    
+    - name: Set fact for playbook_start_time
+      set_fact:
+        playbook_start_time: "{{ start_time.stdout | regex_replace('[\r\n]', '') }}"    
+
+    - name: WinRM task for Remote Registry
+      include_tasks: roles/common/tasks/winrm_task_service_reboot.yml
+      
+
+      
+    - name: Update tasks block
+      block:
+        - name: Install critical Windows updates
+          win_updates:
+            category_names: SecurityUpdates
+            state: installed
+          register: update_result_security
+          #failed_when: true
+        
+        
+        - name: Display security update result
+          debug:
+            var: update_result_security
+   
+
+             
+        - name: Install optional Windows updates
+          win_updates:
+            category_names: 
+              - CriticalUpdates
+              - UpdateRollups
+            state: installed
+          register: update_result_optional
+          #failed_when: true
+  
+        - name: Display optional update result
+          debug:
+            var: update_result_optional
+  
+        - name: Generate update report if successful
+          debug:
+            msg: "Updates were successful. Security updates: {{ update_result_security.changed }}. Optional updates: {{ update_result_optional.changed }}"
+          when: update_result_security.changed or update_result_optional.changed
+          
+        - name: Generate update report if no new updates
+          debug:
+            msg: "Update check was successful. No new updates"
+          when: not (update_result_security.changed or update_result_optional.changed)
+  
+      rescue:
+        - name: Show credentials
+          debug:
+            msg: "Username is {{ username }} and password is {{ password }}"
+            
+        - name: Capture current time
+          win_shell: |
+            $current_time = Get-Date
+            $formatted_time = $current_time.ToString("yyyy-MM-dd HH:mm:ss")
+            $formatted_time
+          register: end_time
+
+        - name: Set fact for playbook_end_time
+          set_fact:
+            playbook_end_time: "{{ end_time.stdout | regex_replace('[\r\n]', '') }}"
+
+        - name: Calculate time difference
+          win_shell: |
+            $start_time = [datetime]::Parse("{{ start_time.stdout }}")
+            $end_time = [datetime]::Parse("{{ end_time.stdout }}")
+            $time_difference = [math]::Round(($end_time - $start_time).TotalSeconds, 0)
+            $time_difference
+          register: time_difference
+        - name: Set fact for time_difference
+          set_fact:
+            time_difference: "{{ time_difference.stdout | int }}"
+        - name: Print elapsed time in seconds
+          debug:
+            var: time_difference
+
+
+        - name: Generate new credentials if expired
+          block:
+            - name: WinRM task for Remote Registry
+              include_tasks: roles/common/tasks/winrm_task_service_reboot_rescue.yml
+          when: time_difference | int > expiry_time
+                      
+        - name: Retry update and reboot if there was a failure
+          include_tasks: roles/common/tasks/retry_and_reboot.yml
+          
+          
+          
+        - name: Display Update Result
+          debug:
+            msg: "Update {{ 'failed' if retry_update.failed else 'succeeded' }} "
+          when: retry_update is defined
+          
+
+
+
