@@ -1,0 +1,72 @@
+- name: Check if credentials are valid
+  win_command: whoami
+  register: result
+  ignore_unreachable: true
+
+
+- name: Show credentials
+  debug:
+    msg: "Username is {{ username }} and password is {{ password }}"
+    
+
+
+- name: Get OS information
+  win_shell: |
+    $os = Get-WmiObject -Class Win32_OperatingSystem
+    $osCaption = $os.Caption
+    $osVersion = $os.Version
+    Write-Output "OS: $osCaption (Version: $osVersion)"
+  register: os_info
+
+- name: Display OS information
+  debug:
+    var: os_info.stdout_lines
+    
+- name: Restart service block    
+  block:    
+    - name: Restart Remote Registry service with retries
+      win_service:
+        name: RemoteRegistry
+        state: restarted
+      retries: "{{ retries }}"
+      delay: "{{ delay }}"
+      register: restart_result
+      ignore_errors: true
+      until: restart_result is success
+      #failed_when: true
+
+  
+    - name: Display restart failure message if all retries fail
+      debug:
+        msg: "Failed to restart Remote Registry service after {{ retries }} retries."
+      failed_when: true
+      when: restart_result.failed | default(false)
+
+- name: Check Remote Registry service status
+  win_service:
+    name: RemoteRegistry
+  register: service_info
+- debug: var=service_info
+
+- name: Enable Remote Registry service if disabled
+  win_service:
+    name: RemoteRegistry
+    state: started
+    start_mode: auto
+  when: service_info.state == 'stopped'
+
+- name: Get system uptime in seconds
+  win_command: powershell -command "(Get-Date) - (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime | Measure-Object -Property TotalSeconds -Minimum | Select-Object -ExpandProperty Minimum"
+  register: uptime_seconds
+
+- name: Convert uptime to a seconds
+  set_fact:
+    system_uptime_seconds: "{{ uptime_seconds.stdout | regex_replace('[\r\n]', '') }}"
+      
+- name: Display system uptime
+  debug:
+    var: system_uptime_seconds
+
+- name: Reboot if uptime more than 1 hour
+  win_reboot:
+  when: uptime_seconds.stdout | int > reboot_hour_limit

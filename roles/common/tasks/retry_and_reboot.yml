@@ -1,0 +1,46 @@
+- name: Check retries
+  fail:
+    msg: "Retry limit exceeded, Update failed"
+  when: reboot_count_limit | int < count | int
+  
+- name: Reboot & retry
+  block:
+    - name: Reboot
+      win_reboot:
+      register: reboot_result
+
+
+    - name: Run updates
+      win_updates:
+        category_names:
+          - SecurityUpdate
+          - CriticalUpdates
+          - UpdateRollups
+        state: installed
+      register: retry_update
+      #ignore_errors: true
+      #failed_when: true
+
+  rescue:
+    - name: Count
+      set_fact:
+        count: "{{ count | int +1 }}"
+      
+    - name: Debug update failed and retry
+      debug:
+        msg: "Update failed, retrying again..."
+  
+    - name: Retry update and reboot if there was a failure
+      include_tasks: roles/common/tasks/retry_and_reboot.yml
+      
+  
+- name: Set update success variable
+  set_fact:
+    update_success: true
+  when: retry_update is success 
+  
+
+  
+     
+
+
